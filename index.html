@@ -546,6 +546,14 @@ body{background:#e8e5db;background-image:repeating-linear-gradient(0deg,transpar
         <label>Cidade / Estado</label>
         <input type="text" id="editCidade" placeholder="Ex: Laguna - SC">
       </div>
+      <div class="auth-field-group" id="editSenhaGroup" style="display:none;">
+        <label>Nova Senha</label>
+        <input type="password" id="editNovaSenha" placeholder="Digite nova senha (mín. 6 caracteres)">
+      </div>
+      <div class="auth-field-group" id="editConfSenhaGroup" style="display:none;">
+        <label>Confirmar Nova Senha</label>
+        <input type="password" id="editConfSenha" placeholder="Confirme a nova senha">
+      </div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <button onclick="salvarPerfil()" style="flex:1;padding:10px;background:#1a5276;color:#fff;border:none;border-radius:6px;font-weight:600;cursor:pointer;">💾 Salvar</button>
         <button onclick="fecharEditPerfil()" style="flex:1;padding:10px;background:#2c3e50;color:#aaa;border:none;border-radius:6px;font-weight:600;cursor:pointer;">Cancelar</button>
@@ -2208,7 +2216,7 @@ function fazerLogin(){
 
 function loginProfessor(professor){
   PROFESSOR_ATUAL=professor;
-  IS_ADMIN=(professor.email==='admin@planejador.com');
+  IS_ADMIN=(professor.email==='lafaietep@gmail.com');
   
   document.getElementById('authOverlay').classList.remove('open');
   document.getElementById('perfilBadge').style.display='inline-block';
@@ -2218,13 +2226,22 @@ function loginProfessor(professor){
   localStorage.setItem('bncc_sessao_atual',JSON.stringify(professor));
   atualizarUsoBadge();
   iniciarSistema();
-
-  // Avisar se restam poucos planos
+  
+  // Avisar se restam poucos planos (apenas para não-admins)
   if(!IS_ADMIN){
     var restantes=getPlanosRestantes();
     if(restantes<=0){
       setTimeout(function(){abrirTokenModal(false);},1200);
     }
+  }
+  
+  // Forçar troca de senha no primeiro acesso do admin
+  if(IS_ADMIN && !professor.senhaTrocada){
+    setTimeout(function(){
+      alert('⚠️ Bem-vindo Admin!\n\nPor segurança, você deve alterar sua senha no primeiro acesso.');
+      editarPerfil();
+      document.getElementById('editNovaSenha').focus();
+    },500);
   }
   console.log('✅ Login:',professor.nome,'('+professor.email+')');
 }
@@ -2248,6 +2265,20 @@ function editarPerfil(){
   document.getElementById('editDisciplina').value=PROFESSOR_ATUAL.disciplina||'';
   document.getElementById('editEscola').value=PROFESSOR_ATUAL.escola||'';
   document.getElementById('editCidade').value=PROFESSOR_ATUAL.cidade||'';
+  
+  // Mostrar campos de senha apenas para admin no primeiro acesso
+  var editSenhaGroup=document.getElementById('editSenhaGroup');
+  var editConfSenhaGroup=document.getElementById('editConfSenhaGroup');
+  if(IS_ADMIN && !PROFESSOR_ATUAL.senhaTrocada){
+    editSenhaGroup.style.display='block';
+    editConfSenhaGroup.style.display='block';
+    document.getElementById('editNovaSenha').value='';
+    document.getElementById('editConfSenha').value='';
+  } else {
+    editSenhaGroup.style.display='none';
+    editConfSenhaGroup.style.display='none';
+  }
+  
   document.getElementById('editPerfilOverlay').style.display='flex';
 }
 
@@ -2260,6 +2291,25 @@ function salvarPerfil(){
   PROFESSOR_ATUAL.disciplina=document.getElementById('editDisciplina').value;
   PROFESSOR_ATUAL.escola=document.getElementById('editEscola').value.trim();
   PROFESSOR_ATUAL.cidade=document.getElementById('editCidade').value.trim();
+  
+  // Verificar se é admin trocando senha
+  var editSenhaGroup=document.getElementById('editSenhaGroup');
+  if(editSenhaGroup.style.display==='block'){
+    var novaSenha=document.getElementById('editNovaSenha').value;
+    var confSenha=document.getElementById('editConfSenha').value;
+    
+    if(!novaSenha || novaSenha.length<6){
+      alert('⚠️ A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    if(novaSenha!==confSenha){
+      alert('⚠️ As senhas não coincidem.');
+      return;
+    }
+    
+    PROFESSOR_ATUAL.senha=btoa(novaSenha);
+    PROFESSOR_ATUAL.senhaTrocada=true;
+  }
   
   // Atualizar no localStorage
   var professores=getProfessores();
@@ -2427,6 +2477,28 @@ document.addEventListener('DOMContentLoaded',function(){
       if(existe){loginProfessor(existe);return;}
     }catch(e){}
   }
+  
+  // Criar conta admin padrão se não existir
+  var professores=getProfessores();
+  var adminExiste=professores.find(function(p){return p.email==='lafaietep@gmail.com';});
+  if(!adminExiste){
+    var adminPadrao={
+      id:Date.now(),
+      nome:'Administrador',
+      email:'lafaietep@gmail.com',
+      senha:btoa('lilica10'),
+      disciplina:'Administração',
+      escola:'Sistema',
+      cidade:'Laguna - SC',
+      dataCadastro:new Date().toISOString(),
+      planosSalvos:0,
+      senhaTrocada:false
+    };
+    professores.push(adminPadrao);
+    setProfessores(professores);
+    console.log('✅ Conta admin criada: lafaietep@gmail.com / lilica10');
+  }
+  
   document.getElementById('authOverlay').classList.add('open');
 });
 </script>
