@@ -2497,6 +2497,12 @@ document.addEventListener('DOMContentLoaded',function(){
     professores.push(adminPadrao);
     setProfessores(professores);
     console.log('✅ Conta admin criada: lafaietep@gmail.com / lilica10');
+    console.log('🔐 Senha codificada:', btoa('lilica10'));
+    alert('✅ Conta de administrador criada!\n\nEmail: lafaietep@gmail.com\nSenha: lilica10\n\nFaça login agora.');
+  } else {
+    console.log('ℹ️ Conta admin já existe:', adminExiste.email);
+    console.log('🔐 Senha armazenada:', adminExiste.senha);
+    console.log('🔐 Senha decodificada:', atob(adminExiste.senha));
   }
   
   document.getElementById('authOverlay').classList.add('open');
