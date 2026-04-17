@@ -1909,7 +1909,7 @@ async function iniciarCompraMp(qtd, valorCentavos, titulo){
     // Pedir ao NOSSO backend para criar a preferência no MP
     var resp=await fetch(base+'/api/mp/criar-preferencia',{
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:(function(){var h={'Content-Type':'application/json'};if(SESSION_TOKEN)h.Authorization='Bearer '+SESSION_TOKEN;return h;})(),
       body:JSON.stringify({
         titulo: titulo+' — Planejador BNCC',
         valor_centavos: valorCentavos,
@@ -1974,7 +1974,7 @@ function iniciarPollingMp(ref, qtd, base){
     }
 
     try{
-      var r=await fetch(base+'/api/mp/verificar/'+encodeURIComponent(ref));
+      var r=await fetch(base+'/api/mp/verificar/'+encodeURIComponent(ref),{headers:(function(){var h={};if(SESSION_TOKEN)h.Authorization='Bearer '+SESSION_TOKEN;return h;})()});
       if(!r.ok) return; // servidor indisponível — continua tentando
       var d=await r.json();
       if(d.aprovado){
@@ -2058,7 +2058,7 @@ async function adminTestarMp(){
   if(!base){adminStatus('adminMpStatus','err','Salve a URL do backend primeiro.');return;}
   adminStatus('adminMpStatus','info','🔄 Testando conexão com o backend...');
   try{
-    var r=await fetch(base+'/api/status',{signal:AbortSignal.timeout(5000)});
+    var r=await fetch(base+'/api/status',{signal:AbortSignal.timeout(5000),headers:(function(){var h={};if(SESSION_TOKEN)h.Authorization='Bearer '+SESSION_TOKEN;return h;})()});
     var d=await r.json();
     if(d.ok){
       adminStatus('adminMpStatus','ok','✅ Backend conectado! MP user: '+( d.mp_user||'OK'));
@@ -2110,6 +2110,23 @@ function adminResetarUso(emailProf){
 // ===== SISTEMA DE AUTENTICAÇÃO DE PROFESSORES =====
 var IS_ADMIN = false;
 var PROFESSOR_ATUAL = null;
+var SESSION_TOKEN = '';
+
+function getApiBase(){
+  try{return (localStorage.getItem('bncc_backend_url')||'').replace(/\/+$/,'');}catch(e){return '';}
+}
+
+async function apiFetch(path, opts){
+  var base=getApiBase();
+  if(!base) throw new Error('Backend não configurado.');
+  var cfg=opts||{};
+  cfg.headers=cfg.headers||{};
+  if(SESSION_TOKEN) cfg.headers['Authorization']='Bearer '+SESSION_TOKEN;
+  var resp=await fetch(base+path,cfg);
+  var data=await resp.json().catch(function(){return {};});
+  if(!resp.ok) throw new Error(data.error||('Erro '+resp.status));
+  return data;
+}
 
 // ── FUNÇÕES AUXILIARES ──────────────────────────────────────────────────────
 function getProfessores(){
@@ -2135,7 +2152,7 @@ function showAuthTab(tab){
 }
 
 // ── CADASTRO ─────────────────────────────────────────────────────────────────
-function fazerCadastro(){
+async function fazerCadastro(){
   var nome=document.getElementById('regNome').value.trim();
   var email=document.getElementById('regEmail').value.trim().toLowerCase();
   var senha=document.getElementById('regSenha').value;
@@ -2162,54 +2179,59 @@ function fazerCadastro(){
     return;
   }
   
+  try{
+    var base=getApiBase();
+    if(base){
+      await apiFetch('/api/auth/register',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({name:nome,email:email,password:senha,disciplina:disciplina,escola:escola,cidade:cidade})
+      });
+      await fazerLogin();
+      return;
+    }
+  }catch(e){
+    errEl.textContent='⚠️ '+e.message;
+    return;
+  }
+
   var professores=getProfessores();
   if(professores.find(function(p){return p.email===email;})){
     errEl.textContent='⚠️ Este email já está cadastrado. Faça login ou use outro email.';
     return;
   }
-  
-  var novoProfessor={
-    id:Date.now(),
-    nome:nome,
-    email:email,
-    senha:btoa(senha),
-    disciplina:disciplina,
-    escola:escola,
-    cidade:cidade,
-    dataCadastro:new Date().toISOString(),
-    planosSalvos:0
-  };
-  
+  var novoProfessor={id:Date.now(),nome:nome,email:email,senha:btoa(senha),disciplina:disciplina,escola:escola,cidade:cidade,dataCadastro:new Date().toISOString(),planosSalvos:0};
   professores.push(novoProfessor);
   setProfessores(professores);
-  
   errEl.textContent='';
-  alert('✅ Conta criada com sucesso!\n\nBem-vindo(a), Prof. '+nome+'!');
+  alert('✅ Conta criada com sucesso!');
   loginProfessor(novoProfessor);
 }
 
 // ── LOGIN ────────────────────────────────────────────────────────────────────
-function fazerLogin(){
+async function fazerLogin(){
   var email=document.getElementById('loginEmail').value.trim().toLowerCase();
   var senha=document.getElementById('loginSenha').value;
   var errEl=document.getElementById('loginErr');
-  
-  if(!email||!senha){
-    errEl.textContent='⚠️ Preencha email e senha.';
-    return;
-  }
-  
+
+  if(!email||!senha){ errEl.textContent='⚠️ Preencha email e senha.'; return; }
+
+  try{
+    var base=getApiBase();
+    if(base){
+      var data=await apiFetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email,password:senha})});
+      SESSION_TOKEN=data.token||'';
+      localStorage.setItem('bncc_session_token',SESSION_TOKEN);
+      var professor={id:data.user.id,nome:data.user.name,email:data.user.email,disciplina:'',escola:'',cidade:'',role:data.user.role};
+      errEl.textContent='';
+      loginProfessor(professor);
+      return;
+    }
+  }catch(e){ errEl.textContent='⚠️ '+e.message; return; }
+
   var professores=getProfessores();
-  var professor=professores.find(function(p){
-    return p.email===email&&atob(p.senha)===senha;
-  });
-  
-  if(!professor){
-    errEl.textContent='⚠️ Email ou senha incorretos. Tente novamente.';
-    document.getElementById('loginSenha').value='';
-    return;
-  }
-  
+  var professor=professores.find(function(p){return p.email===email&&atob(p.senha)===senha;});
+  if(!professor){ errEl.textContent='⚠️ Email ou senha incorretos. Tente novamente.'; document.getElementById('loginSenha').value=''; return; }
   errEl.textContent='';
   loginProfessor(professor);
 }
@@ -2242,6 +2264,8 @@ function fazerLogout(){
   PROFESSOR_ATUAL=null;
   IS_ADMIN=false;
   localStorage.removeItem('bncc_sessao_atual');
+  localStorage.removeItem('bncc_session_token');
+  SESSION_TOKEN='';
   document.getElementById('perfilBadge').style.display='none';
   document.getElementById('btnAdminPanel').style.display='none';
   document.getElementById('authOverlay').classList.add('open');
@@ -2291,6 +2315,7 @@ function iniciarSistema(){
   try{
     var k=localStorage.getItem('gemini_api_key');
     if(k){window.GEMINI_KEY=k;}
+    SESSION_TOKEN=localStorage.getItem('bncc_session_token')||'';
   }catch(e){}
   
   if(PROFESSOR_ATUAL){
