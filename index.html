@@ -406,9 +406,9 @@ body{background:#e8e5db;background-image:repeating-linear-gradient(0deg,transpar
   </div>
 </div>
 
-<!-- ===== GEMINI CONFIG PANEL (hidden, admin only) ===== -->
-<div id="geminiConfigPanel" style="display:none;">
-  <input type="password" id="geminiKeyInput" style="display:none;" oninput="window.GEMINI_KEY=this.value;">
+<!-- ===== GROQ CONFIG PANEL (hidden, admin only) ===== -->
+<div id="groqConfigPanel" style="display:none;">
+  <input type="password" id="groqKeyInput" style="display:none;" oninput="window.GROQ_KEY=this.value;">
 </div>
 
 <!-- ===== AUTH OVERLAY (CADASTRO / LOGIN) ===== -->
@@ -575,16 +575,16 @@ body{background:#e8e5db;background-image:repeating-linear-gradient(0deg,transpar
 
       <!-- Chave IA -->
       <div class="admin-section">
-        <h3>🔑 Chave da API Gemini (IA)</h3>
+        <h3>🔑 Chave da API Groq (IA)</h3>
         <div class="admin-field">
-          <label>Chave de API (AIza...)</label>
+          <label>Chave de API (gsk_...)</label>
           <input type="password" id="adminKeyInput" placeholder="Cole a chave aqui...">
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button class="btn-admin btn-admin-pri" onclick="adminSalvarChave()">✅ Salvar chave</button>
           <button class="btn-admin btn-admin-sec" onclick="adminVerChave()">👁 Ver chave atual</button>
           <button class="btn-admin btn-admin-dan" onclick="adminApagarChave()">🗑 Apagar chave</button>
-          <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size:.74rem;color:#90caf9;align-self:center;">Obter chave gratuita →</a>
+          <a href="https://console.groq.com/keys" target="_blank" style="font-size:.74rem;color:#90caf9;align-self:center;">Obter chave gratuita →</a>
         </div>
         <div class="admin-status info" id="adminKeyStatus" style="display:none;"></div>
       </div>
@@ -1308,45 +1308,49 @@ function buildChecklist(){
 // ===== AI =====
 var SYS='Você é um especialista em BNCC e CBTC (Currículo Base do Território Catarinense) para TODAS as etapas da Educação Básica: Educação Infantil (EI), Ensino Fundamental Anos Iniciais (1º ao 5º ano), Ensino Fundamental Anos Finais (6º ao 9º ano) e Ensino Médio (1ª a 3ª série), incluindo EJA. Domina a Taxonomia de Bloom e adapta suas sugestões à faixa etária e etapa correspondente da habilidade selecionada. Regras invioláveis: 1) NUNCA troque o verbo da habilidade — ele define o nível cognitivo. 2) Os conteúdos devem contemplar explicitamente o VERBO da habilidade — pergunte-se: este conteúdo permite ao aluno exercer este verbo? 3) Ao sugerir conteúdos, sempre indique conexões interdisciplinares possíveis com outras áreas do EM quando pertinente. 4) O caminho metodológico deve integrar: o verbo + os conteúdos escolhidos + as estratégias/metodologias ativas selecionadas + o contexto EJA/EM, com 3 momentos: inicial (mobilização), desenvolvimento (prática no nível cognitivo do verbo) e sistematização. 5) Critérios de avaliação devem contemplar a aquisição/desenvolvimento da habilidade, derivados do verbo, observáveis e mensuráveis. 6) Instrumentos sugeridos devem ser coerentes com os critérios e com as estratégias escolhidas. 7) Critérios vagos NÃO são aceitos. Responda sempre em português do Brasil. Seja direto e prático.';
 
-// ===== GEMINI API =====
-var GEMINI_API_KEY = ''; // Cole sua chave aqui ou use campo abaixo
+// ===== GROQ API =====
+var GROQ_API_KEY = ''; // Cole sua chave aqui ou use campo abaixo
 // Modelos em ordem de preferência — tenta o próximo se der 429
-var GEMINI_MODELS = ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-2.5-flash', 'gemini-3-flash-preview'];
-var GEMINI_MODEL_IDX = 0; // índice atual
+var GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'];
+var GROQ_MODEL_IDX = 0; // índice atual
 
-async function callGemini(prompt, modelIdx){
-  if(modelIdx === undefined) modelIdx = GEMINI_MODEL_IDX;
-  var key = window.GEMINI_KEY || GEMINI_API_KEY;
-  if(!key) throw new Error('Chave da API Gemini não configurada. Clique em ⚙️ Configurar IA para inserir sua chave.');
-  var model = GEMINI_MODELS[modelIdx] || GEMINI_MODELS[0];
-  var url = 'https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+key;
+async function callGroq(prompt, modelIdx){
+  if(modelIdx === undefined) modelIdx = GROQ_MODEL_IDX;
+  var key = window.GROQ_KEY || GROQ_API_KEY;
+  if(!key) throw new Error('Chave da API Groq não configurada. Clique em ⚙️ Configurar IA para inserir sua chave.');
+  var model = GROQ_MODELS[modelIdx] || GROQ_MODELS[0];
+  var url = 'https://api.groq.com/openai/v1/chat/completions';
   var body = {
-    system_instruction:{parts:[{text: SYS}]},
-    contents:[{role:'user',parts:[{text:prompt}]}],
-    generationConfig:{maxOutputTokens:3000,temperature:0.7}
+    model: model,
+    messages: [
+      {role: 'system', content: SYS},
+      {role: 'user', content: prompt}
+    ],
+    max_tokens: 3000,
+    temperature: 0.7
   };
   var r;
-  try { r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); }
-  catch(e) { throw new Error('Erro de conexão com a API Gemini. Verifique sua internet e se a chave está correta.'); }
+  try { r = await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},body:JSON.stringify(body)}); }
+  catch(e) { throw new Error('Erro de conexão com a API Groq. Verifique sua internet e se a chave está correta.'); }
   // Se 429, tenta o próximo modelo automaticamente
   if(r.status === 429){
     var nextIdx = modelIdx + 1;
-    if(nextIdx < GEMINI_MODELS.length){
-      console.warn('Modelo '+model+' com cota esgotada, tentando '+GEMINI_MODELS[nextIdx]+'...');
-      GEMINI_MODEL_IDX = nextIdx;
+    if(nextIdx < GROQ_MODELS.length){
+      console.warn('Modelo '+model+' com cota esgotada, tentando '+GROQ_MODELS[nextIdx]+'...');
+      GROQ_MODEL_IDX = nextIdx;
       // Aguarda 2s antes de tentar novamente
       await new Promise(function(res){setTimeout(res,2000);});
-      return callGemini(prompt, nextIdx);
+      return callGroq(prompt, nextIdx);
     }
     // Todos os modelos esgotados — espera 60s e tenta do início
-    GEMINI_MODEL_IDX = 0;
+    GROQ_MODEL_IDX = 0;
     throw new Error('Limite de requisições atingido em todos os modelos. Aguarde 1 minuto e tente novamente.');
   }
   var d = await r.json();
-  if(d.candidates&&d.candidates[0]&&d.candidates[0].content&&d.candidates[0].content.parts)
-    return d.candidates[0].content.parts.map(function(p){return p.text||'';}).join('');
-  if(d.error) throw new Error('Gemini ('+model+'): '+d.error.message);
-  throw new Error('Resposta inesperada da API Gemini');
+  if(d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content)
+    return d.choices[0].message.content;
+  if(d.error) throw new Error('Groq ('+model+'): '+d.error.message);
+  throw new Error('Resposta inesperada da API Groq');
 }
 
 function habInfo(){
@@ -1359,7 +1363,7 @@ async function analisarIA(){
   var b=document.getElementById('btnIA'),r=document.getElementById('iaResult');
   if(!getHabText()){alert('Selecione ou digite uma habilidade primeiro.');return;}
   b.disabled=true;r.className='ai-result loading';r.innerHTML='<span class="spinner"></span>Analisando...';
-  try{var t=await callGemini('Analise esta habilidade:\n\n'+habInfo()+'\n\nForneça:\n1. Verbos identificados e nível de Bloom confirmado\n2. O que o aluno precisa FAZER (ação cognitiva)\n3. Sobre o quê / com o quê\n4. Para quê (finalidade)\n5. Alertas sobre erros comuns no planejamento desta habilidade\n\nSeja direto e técnico.');r.className='ai-result';r.innerHTML=t.replace(/\n/g,'<br>');}
+  try{var t=await callGroq('Analise esta habilidade:\n\n'+habInfo()+'\n\nForneça:\n1. Verbos identificados e nível de Bloom confirmado\n2. O que o aluno precisa FAZER (ação cognitiva)\n3. Sobre o quê / com o quê\n4. Para quê (finalidade)\n5. Alertas sobre erros comuns no planejamento desta habilidade\n\nSeja direto e técnico.');r.className='ai-result';r.innerHTML=t.replace(/\n/g,'<br>');}
   catch(e){r.className='ai-result loading';r.innerHTML='⚠️ '+e.message;}
   b.disabled=false;
 }
@@ -1372,7 +1376,7 @@ async function sugerirConteudo(){
     var tema2=document.getElementById('temaGerador').value.trim();
     var turma2=document.getElementById('turma').value.trim();
     var p=habInfo()+'\nTema gerador: '+(tema2||'não informado')+'\nTurma: '+(turma2||'não informado')+'\n\nSugira 5 a 8 objetos de conhecimento (conteúdos) que sejam MEIOS para o aluno exercer o VERBO desta habilidade.\nPara cada conteúdo:\n- Explique brevemente como ele permite ao aluno exercer o verbo (não apenas o tema).\n- Indique conexões interdisciplinares possíveis com outras áreas/componentes do EM (Língua Portuguesa, História, Matemática, Arte, Filosofia etc.) quando pertinente.\nFormate como lista numerada.';
-    var t=await callGemini(p);r.className='ai-result';r.innerHTML=t.replace(/\n/g,'<br>');if(!document.getElementById('conteudo').value)document.getElementById('conteudo').value=t;}
+    var t=await callGroq(p);r.className='ai-result';r.innerHTML=t.replace(/\n/g,'<br>');if(!document.getElementById('conteudo').value)document.getElementById('conteudo').value=t;}
   catch(e){r.className='ai-result loading';r.innerHTML='⚠️ '+e.message;}
   b.disabled=false;
 }
@@ -1387,7 +1391,7 @@ async function sugerirMet(){
   try{
     var metSel=Array.from(document.querySelectorAll('#methodGrid .method-chip.selected')).map(function(e){return e.textContent.trim();}).join(', ');
     var p=habInfo()+'\nTema gerador: '+(tema||'não informado')+'\nTurma: '+(turma||'não informado')+'\nConteúdo/Objetos de conhecimento: '+(cont||'não especificado')+'\nEstratégias/Metodologias ativas selecionadas: '+(metSel||'não selecionadas')+'\n\nElabore o CAMINHO METODOLÓGICO integrando TODOS os elementos acima.\nEstrutura obrigatória em 3 momentos:\n1. MOMENTO INICIAL (mobilização/ativação): Como engajar o aluno e ativar conhecimentos prévios usando as estratégias selecionadas.\n2. MOMENTO DE DESENVOLVIMENTO: Atividades que EXIJAM do aluno o mesmo nível cognitivo do VERBO da habilidade, usando os conteúdos como meio e as metodologias ativas escolhidas. Seja específico sobre O QUE O ALUNO FAZ.\n3. MOMENTO DE SISTEMATIZAÇÃO: Como consolidar a aprendizagem e verificar se o aluno desenvolveu a habilidade.\nContexto: EJA/Ensino Médio. Máximo 4 parágrafos. Foco no que o ALUNO faz, não no professor.';
-    var t=await callGemini(p);r.className='ai-result';r.innerHTML=t.replace(/\n/g,'<br>');if(!document.getElementById('metodologia').value)document.getElementById('metodologia').value=t;}
+    var t=await callGroq(p);r.className='ai-result';r.innerHTML=t.replace(/\n/g,'<br>');if(!document.getElementById('metodologia').value)document.getElementById('metodologia').value=t;}
   catch(e){r.className='ai-result loading';r.innerHTML='⚠️ '+e.message;}
   b.disabled=false;
 }
@@ -1402,7 +1406,7 @@ async function sugerirCrit(){
     var instrSel=Array.from(document.querySelectorAll('#instrGrid .method-chip.selected')).map(function(e){return e.textContent.trim();});
     var instrDisp=['Resolução de situações-problema','Produção textual escrita','Apresentação oral','Atividade de análise','Mapa conceitual','Portfólio','Autoavaliação','Prova dissertativa','Rubrica','Observação sistemática','Relatório de atividade','Debate avaliativo'];
     var p=habInfo()+'\nConteúdos definidos: '+(cont2||'não especificado')+'\nCaminho metodológico: '+(met2||'não descrito')+'\nInstrumentos já selecionados: '+(instrSel.length?instrSel.join(', '):'nenhum')+'\nInstrumentos disponíveis no sistema: '+instrDisp.join(', ')+'\n\nCom base em TUDO acima, elabore:\n\nPARTE 1 — CRITÉRIOS DE AVALIAÇÃO (4 critérios)\nRegras: cada critério começa com verbo derivado do verbo da habilidade, é observável e contempla a AQUISIÇÃO/DESENVOLVIMENTO da habilidade. NUNCA use: "demonstrar progressão", "mostrar envolvimento", "aplicação prática e conexões".\nFormato: verbo na 3ª pessoa do singular. Ex: "Analisa situações do cotidiano identificando fenômenos elétricos".\nRetorne os 4 critérios, um por linha, com prefixo CRIT:.\n\nPARTE 2 — INSTRUMENTOS RECOMENDADOS\nDos instrumentos disponíveis no sistema, indique quais são mais adequados para estes critérios e metodologia. Justifique brevemente cada indicação.\nRetorne com prefixo INSTR:';
-    var t=await callGemini(p);
+    var t=await callGroq(p);
     r.className='ai-result';r.innerHTML=t.replace(/\n/g,'<br>');
     var lines=t.split('\n');
     var crits=lines.filter(function(l){return l.match(/^CRIT:/i);}).map(function(l){return l.replace(/^CRIT:/i,'').replace(/^[\d\.\-\•\*\s]+/,'').trim();}).filter(function(l){return l.length>5;});
@@ -2331,8 +2335,8 @@ function salvarPerfil(){
 
 function iniciarSistema(){
   try{
-    var k=localStorage.getItem('gemini_api_key');
-    if(k){window.GEMINI_KEY=k;}
+    var k=localStorage.getItem('groq_api_key');
+    if(k){window.GROQ_KEY=k;}
   }catch(e){}
   
   if(PROFESSOR_ATUAL){
@@ -2357,7 +2361,7 @@ function iniciarSistema(){
 // ── ADMIN ────────────────────────────────────────────────────────────────────
 function abrirAdmin(){
   if(!IS_ADMIN){alert('⚠️ Acesso restrito ao administrador.');return;}
-  var k=localStorage.getItem('gemini_api_key')||'';
+  var k=localStorage.getItem('groq_api_key')||'';
   document.getElementById('adminKeyInput').value=k?'(chave salva — oculta por segurança)':'';
   document.getElementById('adminOverlay').classList.add('open');
   adminListarRascunhos();
@@ -2372,23 +2376,23 @@ function fecharAdmin(){
 function adminSalvarChave(){
   var k=document.getElementById('adminKeyInput').value.trim();
   if(!k||k.startsWith('(chave salva')){adminStatus('adminKeyStatus','err','Digite a chave no campo primeiro.');return;}
-  if(!k.startsWith('AIza')){adminStatus('adminKeyStatus','err','Chave inválida — deve começar com "AIza".');return;}
-  window.GEMINI_KEY=k;
-  try{localStorage.setItem('gemini_api_key',k);}catch(e){}
+  if(!k.startsWith('gsk_')){adminStatus('adminKeyStatus','err','Chave inválida — deve começar com "gsk_".');return;}
+  window.GROQ_KEY=k;
+  try{localStorage.setItem('groq_api_key',k);}catch(e){}
   document.getElementById('adminKeyInput').value='(chave salva — oculta por segurança)';
   adminStatus('adminKeyStatus','ok','✅ Chave salva com sucesso! A IA está ativa.');
 }
 
 function adminVerChave(){
-  var k=localStorage.getItem('gemini_api_key')||'';
+  var k=localStorage.getItem('groq_api_key')||'';
   if(!k){adminStatus('adminKeyStatus','err','Nenhuma chave configurada.');return;}
   adminStatus('adminKeyStatus','info','Chave atual: '+k.substring(0,8)+'••••••••'+k.substring(k.length-4));
 }
 
 function adminApagarChave(){
   if(!confirm('Apagar a chave de IA?'))return;
-  window.GEMINI_KEY='';
-  try{localStorage.removeItem('gemini_api_key');}catch(e){}
+  window.GROQ_KEY='';
+  try{localStorage.removeItem('groq_api_key');}catch(e){}
   document.getElementById('adminKeyInput').value='';
   adminStatus('adminKeyStatus','err','🗑 Chave removida. A IA está desativada.');
 }
